@@ -4,7 +4,7 @@ Welcome to the magical land of Google Sheets, where formulas reign supreme, and 
 This function template is your secret spellbook for conjuring custom Google Sheets formulas. 
 
 You can find my detailed walkthrough here: 
-[![VideoTutorial](https://i.ytimg.com/vi/WOnkgJx8EOY/maxresdefault.jpg](https://youtu.be/WOnkgJx8EOY)
+[![VideoTutorial](https://i.ytimg.com/vi/WOnkgJx8EOY/maxresdefault.jpg)](https://youtu.be/WOnkgJx8EOY)
 
 
 # Code Template
