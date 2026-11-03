@@ -194,8 +194,7 @@ def parse(text):
     for candidate in (t, t[t.find("{"): t.rfind("}") + 1] if "{" in t else ""):
         try:
             obj = json.loads(candidate)
-            if isinstance(obj, dict) and isinstance(obj.get("findings", []), list):
-                obj.setdefault("findings", [])
+            if isinstance(obj, dict) and isinstance(obj.get("findings"), list):
                 obj["findings"] = [f for f in obj["findings"] if isinstance(f, dict)]
                 return obj
         except Exception:
@@ -207,6 +206,12 @@ def parse(text):
 def norm_sev(s):
     s = str(s or "").lower().strip()
     return s if s in SEVERITIES else "info"
+
+
+def wc(text, prop=False):
+    """Escape text for GitHub workflow commands so model or attacker text can't inject or forge commands."""
+    text = str(text).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    return text.replace(":", "%3A").replace(",", "%2C") if prop else text
 
 
 def esc(s, limit=1200):
@@ -292,7 +297,7 @@ def publish(body):
     try:
         upsert_comment(body)
     except Exception as e:
-        print(f"::warning::Could not post the PR comment: {str(e)[:200]}")
+        print(f"::warning::{wc('Could not post the PR comment: ' + str(e)[:200])}")
 
 
 def main():
@@ -306,7 +311,7 @@ def main():
 
     gate = (os.environ.get("AI_REVIEW_FAIL_ON") or "high").strip().lower()
     if gate not in SEVERITIES[:4] + ["off"]:
-        print(f"::warning::Unknown AI_REVIEW_FAIL_ON '{gate}'; using 'high'.")
+        print(f"::warning::{wc('Unknown AI_REVIEW_FAIL_ON value; using high.')}")
         gate = "high"
     key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     model = os.environ.get("OPENROUTER_MODEL", "").strip()
@@ -337,7 +342,7 @@ def main():
         body = render(model or "(not set)", [], [], parts, skipped, dropped, gate, blockers)
         publish(body)
         if blockers:
-            print(f"::{'warning' if gate == 'off' else 'error'} title=AI security review::{blockers[0][:300]}")
+            print(f"::{'warning' if gate == 'off' else 'error'} title=AI security review::{wc(blockers[0][:300])}")
         return 1 if blockers and gate != "off" else 0
 
     findings, summaries, used_model = [], [], model
@@ -369,13 +374,13 @@ def main():
         sev = norm_sev(f.get("severity"))
         kind = "error" if gate != "off" and SEVERITIES.index(sev) <= SEVERITIES.index(gate) else "warning"
         line = f.get("line") if isinstance(f.get("line"), int) and f.get("line") > 0 else 1
-        print(f"::{kind} file={str(f.get('file') or '').replace(',', '%2C')},line={line},"
-              f"title=AI security review: {sev}::{esc(f.get('title'), 200)}")
+        print(f"::{kind} file={wc(str(f.get('file') or '')[:300], True)},line={int(line)},"
+              f"title={wc('AI security review: ' + sev, True)}::{wc(esc(f.get('title'), 200))}")
 
     publish(render(used_model, findings, summaries, parts, skipped, dropped, gate, blockers))
     if blockers and gate != "off":
         for b in blockers:
-            print(f"::error title=AI security review blocks this merge::{b[:300]}")
+            print(f"::error title=AI security review blocks this merge::{wc(b[:300])}")
         return 1
     return 0
 
