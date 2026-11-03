@@ -1,0 +1,72 @@
+name: Code scanning (advisory)
+
+# Second-opinion scanners from the security community. They only report problems
+# that a pull request introduces, as annotations and a job summary. They never
+# block a merge; the blocking checks are "Malware scan" and "AI security review".
+#   zizmor  - GitHub Actions security (injection, dangerous triggers, unpinned actions)
+#   Semgrep - code vulnerabilities (XSS, path traversal, JWT, CORS, injection)
+# Docs: .github/SECURITY-CHECKS.md
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: code-scanning-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: zizmor (GitHub Actions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Scan workflows changed by this pull request
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only --diff-filter=AM "$BASE_SHA"...HEAD -- '.github/workflows/*.yml' '.github/workflows/*.yaml' '.github/actions/**/action.yml' '.github/actions/**/action.yaml')
+          if [ -z "$changed" ]; then echo "No workflow changes."; exit 0; fi
+          # Exact files only: pip refuses anything whose hash differs (official PyPI hashes for 1.32.0).
+          printf '%s\n' 'zizmor==1.32.0 --hash=sha256:84a6acb975accc13408786a2bd274b572537ca19c933ebbc13e78f3988562071 --hash=sha256:dd818f99d833b86cd432d5412d620d936b5df074b33404fff8b67acff55d3259' > "$RUNNER_TEMP/zizmor-req.txt"
+          python3 -m pip install --quiet --disable-pip-version-check --only-binary=:all: --require-hashes -r "$RUNNER_TEMP/zizmor-req.txt"
+          # Advisory: annotate, never fail.
+          zizmor --format github --min-severity medium $changed || true
+
+  semgrep:
+    name: Semgrep (code vulnerabilities)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Report only what this pull request introduces
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check 'semgrep==1.183.0'
+          semgrep scan --metrics=off --quiet --json --output "$RUNNER_TEMP/semgrep.json" \
+            --baseline-commit "$BASE_SHA" \
+            --config p/javascript --config p/typescript --config p/python --config p/github-actions || true
+          python3 -I - "$RUNNER_TEMP/semgrep.json" <<'EOF'
+          import json, os, sys
+          try:
+              results = json.load(open(sys.argv[1])).get("results", [])
+          except Exception:
+              results = []
+          results = [r for r in results if r["extra"].get("severity") in ("ERROR", "WARNING")]
+          for r in results[:100]:
+              level = "error" if r["extra"]["severity"] == "ERROR" else "warning"
+              msg = " ".join(r["extra"].get("message", "").split())[:300]
+              print(f"::{level} file={r['path']},line={r['start']['line']},title=Semgrep {r['check_id'].split('.')[-1]}::{msg}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as fh:
+              fh.write(f"### Semgrep: {len(results)} new finding(s) in this pull request (advisory)\n")
+          EOF

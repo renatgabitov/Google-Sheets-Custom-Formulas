@@ -1,0 +1,57 @@
+name: AI security review
+
+# An AI model (chosen in GitHub settings, called through OpenRouter) reviews every
+# pull request for security problems and posts one comment that updates on each push.
+# It is a merge gate: it fails on high/critical findings and whenever the review can't
+# be completed (fail closed). Make "AI security review" a required check on main.
+# Setup, model switching and gate level: .github/AI-SECURITY-REVIEW.md
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read        # read the code
+  pull-requests: write  # post the review comment; nothing else
+
+concurrency:
+  group: ai-security-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: AI security review
+    # No job-level `if`: a skipped job counts as passing for required checks, so
+    # fork PRs run too and fail with an explanation instead of slipping through.
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out full history (no credentials kept, no project code run)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Use the reviewer from the trusted base, not from the change under review
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git cat-file -e "$BASE_SHA:.github/scripts/ai_security_review.py" 2>/dev/null; then
+            git show "$BASE_SHA:.github/scripts/ai_security_review.py" > "$RUNNER_TEMP/ai_security_review.py"
+            echo "Reviewer source: base commit $BASE_SHA"
+          else
+            cp .github/scripts/ai_security_review.py "$RUNNER_TEMP/ai_security_review.py"
+            echo "Reviewer source: this pull request (first install)"
+          fi
+
+      - name: Review
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          AI_REVIEW_FAIL_ON: ${{ vars.AI_REVIEW_FAIL_ON || 'high' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -I "$RUNNER_TEMP/ai_security_review.py"
