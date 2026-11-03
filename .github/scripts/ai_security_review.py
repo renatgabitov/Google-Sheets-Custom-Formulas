@@ -164,7 +164,7 @@ def call_openrouter(key, model, user_content):
         "model": model,
         "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_content}],
         "temperature": 0,
-        "max_tokens": 6000,
+        "max_tokens": 16000,
     }).encode()
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
                "X-Title": "Represent AI review"}
@@ -349,12 +349,20 @@ def main():
     for i, c in enumerate(chunks, 1):
         content = (f"Pull request diff, call {i} of {len(chunks)}. Items in this call: {', '.join(n for n, _ in c)}\n\n"
                    + "\n".join(f"===== FILE: {n} =====\n{d}" for n, d in c))
-        try:
-            text, used_model = call_openrouter(key, model, content)
-        except Exception as e:
-            blockers.append(f"The review did not complete: {str(e)[:250]}. Re-run the check.")
+        failed = False
+        for attempt in range(3):  # an empty or cut-off answer is retried; the gate stays closed if it persists
+            try:
+                text, used_model = call_openrouter(key, model, content)
+            except Exception as e:
+                blockers.append(f"The review did not complete: {str(e)[:250]}. Re-run the check.")
+                failed = True
+                break
+            result = parse(text)
+            if not result.get("unparsed"):
+                break
+            print(f"Call {i}: unreadable answer on attempt {attempt + 1}, retrying.", file=sys.stderr)
+        if failed:
             break
-        result = parse(text)
         if result.get("unparsed"):
             print("Unreadable model output (first 2000 chars):\n" + text[:2000], file=sys.stderr)
             blockers.append(f"The model's answer for call {i} could not be read, so that part wasn't reviewed. Re-run the check.")
