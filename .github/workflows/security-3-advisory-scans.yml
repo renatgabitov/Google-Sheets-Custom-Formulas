@@ -1,8 +1,8 @@
-name: Code scanning (advisory)
+name: Security 3 - Advisory scans
 
 # Second-opinion scanners from the security community. They only report problems
 # that a pull request introduces, as annotations and a job summary. They never
-# block a merge; the blocking checks are "Malware scan" and "AI security review".
+# block a merge; the blocking checks are "Security 1 - Malware check" and "Security 2 - AI review".
 #   zizmor  - GitHub Actions security (injection, dangerous triggers, unpinned actions)
 #   Semgrep - code vulnerabilities (XSS, path traversal, JWT, CORS, injection)
 # Docs: .github/SECURITY-CHECKS.md
@@ -14,12 +14,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: code-scanning-${{ github.event.pull_request.number }}
+  group: security-3-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   zizmor:
-    name: zizmor (GitHub Actions)
+    name: Security 3a - Workflow scan (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,7 +40,7 @@ jobs:
           zizmor --format github --min-severity medium $changed || true
 
   semgrep:
-    name: Semgrep (code vulnerabilities)
+    name: Security 3b - Code scan (advisory)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

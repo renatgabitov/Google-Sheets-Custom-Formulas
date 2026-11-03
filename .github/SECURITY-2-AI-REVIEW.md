@@ -1,4 +1,4 @@
-# AI security review
+# Security 2 - AI review
 
 Every pull request gets a security review from an AI model through
 [OpenRouter](https://openrouter.ai). It posts one comment on the PR and updates
@@ -23,7 +23,7 @@ by breaking the reviewer.
 If it blocks something you're sure is fine, fix the finding or push again (the model
 reviews again). As a last resort, an organization admin can bypass the rule on that one PR.
 
-It pairs with the **Malware scan** check (MALWARE-SCAN.md). That one is deterministic and
+It pairs with the **Security 1 - Malware check** (SECURITY-1-MALWARE-CHECK.md). That one is deterministic and
 can't be talked out of a finding. This one understands logic, such as a backdoor written as
 ordinary code, which no pattern can catch. Require both.
 
@@ -37,7 +37,7 @@ ordinary code, which no pattern can catch. Require both.
      a model id from [openrouter.ai/models](https://openrouter.ai/models)
      (for example `anthropic/...` or `openai/...`), same repository access.
 3. **Make it required:** Repository → Settings → Rules → the ruleset for `main` →
-   Require status checks to pass → add **AI security review** (next to **Malware scan**).
+   Require status checks to pass → add **Security 2 - AI review** (next to **Security 1 - Malware check**).
 
 A repository that gets this workflow but not the secret will block every PR, by design.
 
@@ -53,7 +53,7 @@ A repository that gets this workflow but not the secret will block every PR, by 
 - The PR's changes with surrounding context. Large files are split into parts, never cut.
   Up to 8 model calls per run (about 1 MB of diff); a bigger PR fails as "too large to
   review in full". Split it.
-- Lockfiles, build output and binary files aren't sent to the model; the Malware scan
+- Lockfiles, build output and binary files aren't sent to the model; the Malware check
   checks those.
 - It runs the reviewer script from the base branch, so a PR can't change the reviewer
   that reviews it.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""AI security review of a pull request through OpenRouter, used as a merge gate.
+"""AI review of a pull request through OpenRouter, used as a merge gate.
 
 Sends the pull request's changes to the model named in OPENROUTER_MODEL, asks
 for a security review, and posts the result as one PR comment (updated in place
@@ -114,7 +114,7 @@ def split_diff(name, d):
 
 
 def collect_diff(base, head):
-    """Per-file diffs of the PR (merge-base...head), skipping lockfiles/generated/binary (the malware scan covers those)."""
+    """Per-file diffs of the PR (merge-base...head), skipping lockfiles/generated/binary (the malware check covers those)."""
     names = [n for n in git("diff", "--name-only", "-z", "--no-renames", f"{base}...{head}").split("\0") if n]
     parts, skipped = [], []
     for name in names:
@@ -167,7 +167,7 @@ def call_openrouter(key, model, user_content):
         "max_tokens": 6000,
     }).encode()
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json",
-               "X-Title": "Represent AI security review"}
+               "X-Title": "Represent AI review"}
     last = None
     for attempt in range(4):
         try:
@@ -222,7 +222,7 @@ def esc(s, limit=1200):
 
 def render(model, findings, summaries, parts, skipped, dropped, gate, blockers):
     icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🔵", "info": "⚪"}
-    lines = [MARKER, "## 🛡️ AI security review", ""]
+    lines = [MARKER, "## 🛡️ Security 2 - AI review", ""]
     if gate == "off":
         lines.append("ℹ️ **Advisory mode** (AI_REVIEW_FAIL_ON=off): findings don't block merging.")
     elif blockers:
@@ -255,10 +255,10 @@ def render(model, findings, summaries, parts, skipped, dropped, gate, blockers):
               f"- Gate: `{gate}`",
               f"- Files reviewed in full: {len(all_files - partly_dropped)} of {len(all_files)}"]
     if skipped:
-        lines.append(f"- Not sent to the model (covered by the Malware scan): {esc(', '.join(skipped), 1500)}")
+        lines.append(f"- Not sent to the model (covered by the Malware check): {esc(', '.join(skipped), 1500)}")
     if dropped:
         lines.append(f"- ⚠️ Not reviewed (over the size cap): {esc(', '.join(dropped), 1500)}")
-    lines += ["", "AI review can miss things or be misled. The **Malware scan** check is the deterministic gate.",
+    lines += ["", "AI review can miss things or be misled. The **Security 1 - Malware check** is the deterministic gate.",
               "</details>"]
     return "\n".join(lines)
 
@@ -335,14 +335,14 @@ def main():
     elif not key or not model:
         missing = [x for x, v in (("the OPENROUTER_API_KEY secret", key), ("the OPENROUTER_MODEL variable", model)) if not v]
         blockers.append(f"The review can't run: {' and '.join(missing)} {'is' if len(missing) == 1 else 'are'} not set "
-                        "for this repository. See .github/AI-SECURITY-REVIEW.md.")
+                        "for this repository. See .github/SECURITY-2-AI-REVIEW.md.")
     if blockers or not parts:
         if not parts and not blockers:
             print("Nothing reviewable in this PR (only lockfiles, binaries or generated files).", file=sys.stderr)
         body = render(model or "(not set)", [], [], parts, skipped, dropped, gate, blockers)
         publish(body)
         if blockers:
-            print(f"::{'warning' if gate == 'off' else 'error'} title=AI security review::{wc(blockers[0][:300])}")
+            print(f"::{'warning' if gate == 'off' else 'error'} title=Security 2 - AI review::{wc(blockers[0][:300])}")
         return 1 if blockers and gate != "off" else 0
 
     findings, summaries, used_model = [], [], model
@@ -375,12 +375,12 @@ def main():
         kind = "error" if gate != "off" and SEVERITIES.index(sev) <= SEVERITIES.index(gate) else "warning"
         line = f.get("line") if isinstance(f.get("line"), int) and f.get("line") > 0 else 1
         print(f"::{kind} file={wc(str(f.get('file') or '')[:300], True)},line={int(line)},"
-              f"title={wc('AI security review: ' + sev, True)}::{wc(esc(f.get('title'), 200))}")
+              f"title={wc('Security 2 - AI review: ' + sev, True)}::{wc(esc(f.get('title'), 200))}")
 
     publish(render(used_model, findings, summaries, parts, skipped, dropped, gate, blockers))
     if blockers and gate != "off":
         for b in blockers:
-            print(f"::error title=AI security review blocks this merge::{wc(b[:300])}")
+            print(f"::error title=Security 2 - AI review blocks this merge::{wc(b[:300])}")
         return 1
     return 0
 

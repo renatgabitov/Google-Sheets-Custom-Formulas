@@ -1,10 +1,10 @@
-name: AI security review
+name: Security 2 - AI review
 
 # An AI model (chosen in GitHub settings, called through OpenRouter) reviews every
 # pull request for security problems and posts one comment that updates on each push.
 # It is a merge gate: it fails on high/critical findings and whenever the review can't
-# be completed (fail closed). Make "AI security review" a required check on main.
-# Setup, model switching and gate level: .github/AI-SECURITY-REVIEW.md
+# be completed (fail closed). Make "Security 2 - AI review" a required check on main.
+# Setup, model switching and gate level: .github/SECURITY-2-AI-REVIEW.md
 
 on:
   pull_request:
@@ -15,12 +15,12 @@ permissions:
   pull-requests: write  # post the review comment; nothing else
 
 concurrency:
-  group: ai-security-review-${{ github.event.pull_request.number }}
+  group: security-2-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   review:
-    name: AI security review
+    name: Security 2 - AI review
     # No job-level `if`: a skipped job counts as passing for required checks, so
     # fork PRs run too and fail with an explanation instead of slipping through.
     runs-on: ubuntu-latest
